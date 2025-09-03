@@ -3,9 +3,14 @@
 01-2_camping.ipynb
 01-3_kakaomap_search.ipynb
 
-# text
-*.txt
+# file
+data.txt
+test.txt
+*.pdf
 
 # env
 .env
 .gradio
+
+__pycache__
+data
