@@ -10,7 +10,7 @@
 
 
 # 1. 라이브러리 임포트
-import transformers    
+import transformers
 import torch
 
 # 2. 사용할 모델 ID 지정
@@ -22,7 +22,9 @@ model_id = "42dot/42dot_LLM-SFT-1.3B"
 pipeline = transformers.pipeline(
     "text-generation",
     model=model_id,
-    model_kwargs={"torch_dtype": torch.float16}   # torch.float16 : 반정밀도(half-precision) 연산을 사용해 메모리 절약 & 속도 향상.
+    model_kwargs={
+        "torch_dtype": torch.float16    # torch.float16 : 반정밀도(half-precision) 연산을 사용해 메모리 절약 & 속도 향상.
+    },  
 )
 
 # 4. 모델을 평가(추론) 모드로 전환
@@ -36,12 +38,8 @@ prompt = "삼성전자에 대해 알려줘."
 #    - temperature=0.3: 낮을수록 보수적/결정적
 #    - top_p=0.9: nucleus sampling 임계값
 outputs = pipeline(
-    prompt,
-    max_new_tokens=100,
-    do_sample=True,
-    temperature=0.3,
-    top_p=0.9
+    prompt, max_new_tokens=100, do_sample=True, temperature=0.3, top_p=0.9
 )
 
 # 7. 반환 텍스트에서 프롬프트 부분을 제외하고 생성분만 출력
-print(outputs[0]['generated_text'][len(prompt):])
+print(outputs[0]["generated_text"][len(prompt) :])

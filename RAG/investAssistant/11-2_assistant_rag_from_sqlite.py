@@ -1,4 +1,3 @@
-
 # 10_rag_from_sqlite.py
 # ---------------------------------------------------------------------------
 # 3) (별도 단계로 이미 저장된) SQLite DB 파일에서 문서를 읽어와
@@ -32,10 +31,13 @@ EMB_MODEL = "text-embedding-3-small"
 DB_PATH = "company_news.db"
 TABLE = "news"
 
+
 def load_documents(db_path: str):
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
-    cur.execute(f"SELECT id, 기업명, 날짜, 문서_카테고리, 요약, 주요_이벤트 FROM {TABLE} ORDER BY 날짜 ASC")
+    cur.execute(
+        f"SELECT id, 기업명, 날짜, 문서_카테고리, 요약, 주요_이벤트 FROM {TABLE} ORDER BY 날짜 ASC"
+    )
     rows = cur.fetchall()
     conn.close()
 
@@ -46,23 +48,28 @@ def load_documents(db_path: str):
             events = ", ".join(json.loads(events_json))
         except Exception:
             events = events_json
-        metadatas.append({
-            "id": rid,
-            "기업명": company,
-            "날짜": date,
-            "문서_카테고리": category,
-            "주요_이벤트": events,
-            "source": f"db_doc_{rid}"
-        })
+        metadatas.append(
+            {
+                "id": rid,
+                "기업명": company,
+                "날짜": date,
+                "문서_카테고리": category,
+                "주요_이벤트": events,
+                "source": f"db_doc_{rid}",
+            }
+        )
     return texts, metadatas
+
 
 # 3. 간단 검색기 구성(BM25 + FAISS 앙상블) ----------------------------------
 def build_retriever(texts, metadatas):
-    bm25 = BM25Retriever.from_texts(texts, metadatas=metadatas); bm25.k = 2
+    bm25 = BM25Retriever.from_texts(texts, metadatas=metadatas)
+    bm25.k = 2
     emb = OpenAIEmbeddings(api_key=api_key, model=EMB_MODEL)
     faiss_store = FAISS.from_texts(texts, emb, metadatas=metadatas)
     faiss = faiss_store.as_retriever(search_kwargs={"k": 2})
     return EnsembleRetriever(retrievers=[bm25, faiss], weights=[0.3, 0.7])
+
 
 # 4. 프롬프트 빌더 -----------------------------------------------------------
 def build_prompt(query: str, docs):
@@ -86,23 +93,31 @@ def build_prompt(query: str, docs):
 자료:
 {context}
 """
+
+
 # 5. LLM 호출 ---------------------------------------------------------------
 def ask_llm(prompt: str) -> str:
     resp = client.chat.completions.create(
         model=CHAT_MODEL,
         temperature=0,
         messages=[
-            {"role": "system", "content": "You are a helpful assistant that answers in Korean."},
+            {
+                "role": "system",
+                "content": "You are a helpful assistant that answers in Korean.",
+            },
             {"role": "user", "content": prompt},
         ],
     )
     return resp.choices[0].message.content.strip()
 
+
 # 6. 메인 실행 ---------------------------------------------------------------
 if __name__ == "__main__":
     texts, metadatas = load_documents(DB_PATH)
     if not texts:
-        print("DB에 문서가 없습니다. 먼저 10_make_sqlite_data.py 를 실행하여 데이터를 채워주세요.")
+        print(
+            "DB에 문서가 없습니다. 먼저 10_make_sqlite_data.py 를 실행하여 데이터를 채워주세요."
+        )
         raise SystemExit(0)
 
     retriever = build_retriever(texts, metadatas)
@@ -117,7 +132,9 @@ if __name__ == "__main__":
     else:
         print("=== 검색된 문서 ===")
         for i, d in enumerate(docs, 1):
-            print(f"[{i}] source={d.metadata.get('source')} / 기업명={d.metadata.get('기업명')} / 날짜={d.metadata.get('날짜')} / 카테고리={d.metadata.get('문서_카테고리')}")
+            print(
+                f"[{i}] source={d.metadata.get('source')} / 기업명={d.metadata.get('기업명')} / 날짜={d.metadata.get('날짜')} / 카테고리={d.metadata.get('문서_카테고리')}"
+            )
             print(d.page_content, "\n")
 
         prompt = build_prompt(query, docs)

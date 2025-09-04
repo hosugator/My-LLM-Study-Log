@@ -7,17 +7,21 @@ from dotenv import load_dotenv
 
 from langchain_community.retrievers import BM25Retriever
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings.sentence_transformer import SentenceTransformerEmbeddings
+from langchain_community.embeddings.sentence_transformer import (
+    SentenceTransformerEmbeddings,
+)
 from langchain.retrievers import EnsembleRetriever
 
 import transformers
+from pathlib import Path
 
 # 2. 환경 로드 (필수는 아님: on-premise이므로 API키 필요없음) --------------------
 load_dotenv()
 
 # 3. DB 경로/테이블 --------------------------------------------------------------
-DB_PATH = "company_news.db"
-TABLE   = "news"
+DB_PATH = Path(__file__).parent / "company_news.db"
+TABLE = "news"
+
 
 # 4. DB에서 문서 로드 ------------------------------------------------------------
 def load_documents(db_path: str):
@@ -27,8 +31,10 @@ def load_documents(db_path: str):
         )
 
     conn = sqlite3.connect(db_path)
-    cur  = conn.cursor()
-    cur.execute(f"SELECT id, 기업명, 날짜, 문서_카테고리, 요약, 주요_이벤트 FROM {TABLE} ORDER BY 날짜 ASC")
+    cur = conn.cursor()
+    cur.execute(
+        f"SELECT id, 기업명, 날짜, 문서_카테고리, 요약, 주요_이벤트 FROM {TABLE} ORDER BY 날짜 ASC"
+    )
     rows = cur.fetchall()
     conn.close()
 
@@ -39,12 +45,18 @@ def load_documents(db_path: str):
             events = ", ".join(json.loads(events_json))
         except Exception:
             events = events_json
-        metadatas.append({
-            "id": rid, "기업명": company, "날짜": date,
-            "문서_카테고리": category, "주요_이벤트": events,
-            "source": f"db_doc_{rid}"
-        })
+        metadatas.append(
+            {
+                "id": rid,
+                "기업명": company,
+                "날짜": date,
+                "문서_카테고리": category,
+                "주요_이벤트": events,
+                "source": f"db_doc_{rid}",
+            }
+        )
     return texts, metadatas
+
 
 # 5. on-premise 임베딩(SBERT) & FAISS/BM25/앙상블 구성 ---------------------------
 def build_retriever(texts, metadatas):
@@ -53,7 +65,9 @@ def build_retriever(texts, metadatas):
     bm25.k = 2
 
     # 5-2) SBERT 임베딩 (로컬)  ※ 다국어: distiluse-base-multilingual-cased-v1
-    embedding = SentenceTransformerEmbeddings(model_name="distiluse-base-multilingual-cased-v1")
+    embedding = SentenceTransformerEmbeddings(
+        model_name="distiluse-base-multilingual-cased-v1"
+    )
 
     # 5-3) FAISS 벡터스토어 (의미기반)
     faiss_store = FAISS.from_texts(texts, embedding, metadatas=metadatas)
@@ -63,10 +77,11 @@ def build_retriever(texts, metadatas):
     ensemble = EnsembleRetriever(retrievers=[bm25, faiss], weights=[0.3, 0.7])
     return ensemble
 
+
 # 6. on-premise LLM 파이프라인(Hugging Face Transformers) -----------------------
 def build_pipeline(model_id: str = "42dot/42dot_LLM-SFT-1.3B"):
     # GPU 있으면 float16, 없으면 float32
-    use_cuda   = torch.cuda.is_available()
+    use_cuda = torch.cuda.is_available()
     torch_dtype = torch.float16 if use_cuda else torch.float32
 
     pipe = transformers.pipeline(
@@ -78,9 +93,11 @@ def build_pipeline(model_id: str = "42dot/42dot_LLM-SFT-1.3B"):
     pipe.model.eval()
     return pipe
 
+
 # 7. 검색 함수 -------------------------------------------------------------------
 def search(query: str, retriever):
     return retriever.invoke(query) or []
+
 
 # 8. 프롬프트 구성 ---------------------------------------------------------------
 def build_prompt(query: str, docs):
@@ -92,7 +109,7 @@ def build_prompt(query: str, docs):
         "- 답할 수 없으면 '제공된 문서에서 찾지 못했습니다.'라고 말하세요.",
         "",
         f"질문:\n{query}\n",
-        "자료:"
+        "자료:",
     ]
     for i, d in enumerate(docs, 1):
         m = d.metadata
@@ -102,6 +119,7 @@ def build_prompt(query: str, docs):
         )
     lines.append("답변:")
     return "\n".join(lines)
+
 
 # 9. LLM 호출 --------------------------------------------------------------------
 def sllm_generate(pipe, prompt: str):
@@ -119,6 +137,7 @@ def sllm_generate(pipe, prompt: str):
     if "답변:" in full_text:
         return full_text.split("답변:", 1)[-1].strip()
     return full_text.strip()
+
 
 # 10. 메인 실행 ------------------------------------------------------------------
 if __name__ == "__main__":
@@ -144,7 +163,9 @@ if __name__ == "__main__":
         print("제공된 문서에서 찾지 못했습니다.")
     else:
         for i, d in enumerate(docs, 1):
-            print(f"[{i}] source={d.metadata.get('source')} / 기업명={d.metadata.get('기업명')} / 날짜={d.metadata.get('날짜')} / 카테고리={d.metadata.get('문서_카테고리')}")
+            print(
+                f"[{i}] source={d.metadata.get('source')} / 기업명={d.metadata.get('기업명')} / 날짜={d.metadata.get('날짜')} / 카테고리={d.metadata.get('문서_카테고리')}"
+            )
             print(d.page_content, "\n")
 
         prompt = build_prompt(query, docs)
